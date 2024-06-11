@@ -17,7 +17,7 @@ There are some packages that are used in this process including Dplyr, Stringr, 
 # install.packages("BiocManager")
 # BiocManager::install("Biostrings")
 # install.packages("ggplot2")
-# install.packages('DT')
+install.packages('DT')
 # install.packages('dplyr')
 # install.packages('stringr')
 
@@ -32,7 +32,7 @@ library(stringr)
 
 ```
 
-## 1. Database Creation
+## Database Creation
 
 This part is [**not unique to the file**]{.underline}, it is creating the database you will use when running blast on your file (ie. you don't need to change this section with each different file of interest).
 
@@ -41,116 +41,93 @@ This part is [**not unique to the file**]{.underline}, it is creating the databa
 ```{bash}
 cd ../data
 curl -O https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz
-mv uniprot_sprot.fasta.gz uniprot_sprot_r2023_04.fasta.gz
-gunzip -k uniprot_sprot_r2023_04.fasta.gz
+mv uniprot_sprot.fasta.gz uniprot_sprot_r2024_02.fasta.gz
+gunzip -k uniprot_sprot_r2024_02.fasta.gz
 ```
 
 ### Making the Database
 
 ```{bash}
 mkdir ../blastdb
-/home/shared/ncbi-blast-2.11.0+/bin/makeblastdb \
--in ../data/uniprot_sprot_r2023_04.fasta \
+/home/shared/ncbi-blast-2.15.0+/bin/makeblastdb \
+-in ../data/uniprot_sprot_r2024_02.fasta \
 -dbtype prot \
--out ../blastdb/uniprot_sprot_r2023_04
+-out ../blastdb/uniprot_sprot_r2024_02
 ```
 
-## \*\*\*\*2. Getting the query fasta file
+## Getting the query fasta file
 
 This is where you start changing things for your specific [**file of interest.**]{.underline}
 
 You use curl to retrieve your file from gannet (or whatever server it is stored on).
 
 ```{bash}
-curl https://gannet.fish.washington.edu/seashell/snaps/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.fasta \
--k \
-> ../data/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.fasta
+wget -O ../data/olurida_transcriptome_v3.fasta http://eagle.fish.washington.edu/cnidarian/Olurida_transcriptome_v3.fasta
 
+```
+
+```         
 ```
 
 Taking a peek at that file via `head()` and getting a count of sequences
 
 ```{bash}
 
-head -3 ../data/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.fasta
+head -3 ../data/olurida_transcriptome_v3.fasta
 
 ```
 
 ```{bash}
 
 echo "How many sequences are there?"
-grep -c ">" ../data/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.fasta
+grep -c ">" ../data/olurida_transcriptome_v3.fasta
 
 ```
 
-## 3. File Visualization
+## Running Blast
 
-At this point, we use the BiocManager, Biostrings, and ggplot2 packages. There were some issues with version conflicts between the biostring package and the `ReadDNAStringSet()` function. So we skip this step for now.
-
-```{r}
-
-# Read FASTA file
-fasta_file <- "../data/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.fasta"  # Replace with the name of your FASTA file
-sequences <- ReadDNAStringSet(fasta_file)
-
-# Calculate sequence lengths
-sequence_lengths <- width(sequences)
-
-# Create a data frame
-sequence_lengths_df <- data.frame(Length = sequence_lengths)
-
-# Plot histogram using ggplot2
-ggplot(sequence_lengths_df, aes(x = Length)) +
-  geom_histogram(binwidth = 1, color = "grey", fill = "blue", alpha = 0.75) +
-  labs(title = "Histogram of Sequence Lengths",
-       x = "Sequence Length",
-       y = "Frequency") +
-  theme_minimal()
-
-```
-
-## 4. Running Blastp
-
-We run blastp since it is a protein file.
+We run blast since it is a protein file.
 
 ```{bash}
-/home/shared/ncbi-blast-2.11.0+/bin/blastp \
--query ../data/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.fasta \
--db ../blastdb/uniprot_sprot_r2023_04 \
--out ../output/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.tab \
+
+/home/shared/ncbi-blast-2.15.0+/bin/blastx \
+-query ../data/olurida_transcriptome_v3.fasta \
+-db ../blastdb/uniprot_sprot_r2024_02 \
+-out ../output/olurida_blastout.tab \
 -evalue 1E-20 \
 -num_threads 20 \
 -max_target_seqs 1 \
 -outfmt 6
+
 ```
 
 Peeking at the output file
 
 ```{bash}
-head -2 ../output/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.tab
+head -2 ../blastdb/uniprot_sprot_r2024_04
 ```
 
 ```{bash}
 echo "Number of lines in output"
-wc -l ../output/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.tab
+wc -l ../output/olurida_blastout.tab
 ```
 
-## 5. Joining Blast Table with Annotations
+## Joining Blast Table with Annotations
 
 ### Prepping Blast table for easy join
 
 ```{bash}
 
-tr '|' '\t' < ../output/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.tab \
-> ../output/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins_sep.tab
+tr '|' '\t' < ../output/olurida_blastout.tab \
+> ../output/olurida_blastout_sep.tab
 
 #peeking to make sure it looks as expected
-head -1 ../output/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins_sep.tab
+head -1 ../output/olurida_blastout_sep.tab
 
 
 ```
 
-## 6. Blast Result Visualization
+## Blast Result Visualization
 
 " Could do some cool stuff in R here reading in the table "
 
@@ -158,7 +135,7 @@ Save our output file and reference uniprot table as objects
 
 ```{r}
 
-bltabl <- read.csv("../output/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins_sep.tab", sep = '\t', header = FALSE)
+bltabl <- read.csv("../output/olurida_blastout_sep.tab", sep = '\t', header = FALSE)
 
 spgo <- read.csv("https://gannet.fish.washington.edu/seashell/snaps/uniprot_table_r2023_01.tab", sep = '\t', header = TRUE)
 
@@ -204,7 +181,7 @@ Get string counts, and create a plot of top 10 which will provide "top 10 specie
 ```{r}
 
 # Read dataset
-dataset <- read.csv("../output/Rphil-assembly_v4_NoCont.AGAT_predicted-proteins.tab", sep = '\t', header = FALSE)  # Replace with the path to your dataset
+dataset <- read.csv("../output/olurida_blastout.tab", sep = '\t', header = FALSE)  # Replace with the path to your dataset
 
 # Select the column of interest
 #dataset$V1 <- "Organism"  # Replace with the name of the column of interest
